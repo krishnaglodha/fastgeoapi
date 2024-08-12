@@ -1,4 +1,5 @@
 """Build the Dockerfile."""
+
 import logging
 import shlex
 import shutil
@@ -7,7 +8,6 @@ from pathlib import Path
 from typing import Optional
 
 import typer
-
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ def main(
         build_command = (
             f"{docker_command} buildx build "
             f"--platform {docker_platform} "
-            f"--tag '{base_image_name}:{current_git_branch}' "
+            f"--tag '{base_image_name}:{_sanitize_git_branch_name(current_git_branch)}' "  # noqa B950
             f"--tag '{base_image_name}:{current_git_commit}' "
             f"--file {Path(__file__).parent.parent.parent / 'Dockerfile'} "
             f"--label git-commit={current_git_commit} "

@@ -1,4 +1,5 @@
 """Main module."""
+
 import os
 import sys
 from pathlib import Path
@@ -6,20 +7,13 @@ from typing import Any
 
 import loguru
 import uvicorn
-from app.config.app import configuration as cfg
-from app.config.logging import create_logger
-from app.middleware.pygeoapi import OpenapiSecurityMiddleware
-from app.utils.app_exceptions import app_exception_handler
-from app.utils.app_exceptions import AppExceptionError
-from app.utils.pygeoapi_exceptions import PygeoapiEnvError
-from app.utils.pygeoapi_exceptions import PygeoapiLanguageError
-from app.utils.request_exceptions import http_exception_handler
-from app.utils.request_exceptions import request_validation_exception_handler
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi_opa import OPAMiddleware
 from loguru import logger
 from mangum import Mangum
+from openapi_pydantic.v3.v3_0_3 import OAuthFlow
+from openapi_pydantic.v3.v3_0_3 import OAuthFlows
 from openapi_pydantic.v3.v3_0_3 import SecurityScheme
 from pygeoapi.l10n import LocaleError
 from pygeoapi.openapi import generate_openapi_document
@@ -27,6 +21,16 @@ from pygeoapi.provider.base import ProviderConnectionError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 
+from app.config.app import configuration as cfg
+from app.config.logging import create_logger
+from app.middleware.oauth2 import Oauth2Middleware
+from app.middleware.pygeoapi import OpenapiSecurityMiddleware
+from app.utils.app_exceptions import AppExceptionError
+from app.utils.app_exceptions import app_exception_handler
+from app.utils.pygeoapi_exceptions import PygeoapiEnvError
+from app.utils.pygeoapi_exceptions import PygeoapiLanguageError
+from app.utils.request_exceptions import http_exception_handler
+from app.utils.request_exceptions import request_validation_exception_handler
 
 if cfg.LOG_LEVEL == "debug":
     logger.remove()
@@ -113,19 +117,45 @@ def create_app():  # noqa: C901
         raise e
 
     # Add OPAMiddleware to the pygeoapi app
-    security_scheme = None
+    security_schemes = []
     if cfg.OPA_ENABLED:
-        if cfg.API_KEY_ENABLED:
-            raise ValueError("OPA_ENABLED and API_KEY_ENABLED are mutually exclusive")
-        from app.config.auth import opa_config
+        if cfg.API_KEY_ENABLED or cfg.JWKS_ENABLED:
+            raise ValueError(
+                "OPA_ENABLED, JWKS_ENABLED and API_KEY_ENABLED are mutually exclusive"
+            )
+        from app.config.auth import auth_config
 
-        PYGEOAPI_APP.add_middleware(OPAMiddleware, config=opa_config)
+        PYGEOAPI_APP.add_middleware(OPAMiddleware, config=auth_config)
 
-        security_scheme = SecurityScheme(
-            type="openIdConnect",
-            name="OIDC",
-            openIdConnectUrl=cfg.OIDC_WELL_KNOWN_ENDPOINT,
-        )
+        security_schemes = [
+            SecurityScheme(
+                type="openIdConnect",
+                openIdConnectUrl=cfg.OIDC_WELL_KNOWN_ENDPOINT,
+            )
+        ]
+    elif cfg.JWKS_ENABLED:
+        if cfg.API_KEY_ENABLED or cfg.OPA_ENABLED:
+            raise ValueError(
+                "OPA_ENABLED, JWKS_ENABLED and API_KEY_ENABLED are mutually exclusive"
+            )
+        from app.config.auth import auth_config
+
+        PYGEOAPI_APP.add_middleware(Oauth2Middleware, config=auth_config)
+
+        security_schemes = [
+            SecurityScheme(
+                type="oauth2",
+                name="pygeoapi",
+                flows=OAuthFlows(
+                    clientCredentials=OAuthFlow(
+                        tokenUrl=cfg.OAUTH2_TOKEN_ENDPOINT, scopes={}
+                    )
+                ),
+            ),
+            SecurityScheme(
+                type="http", name="pygeoapi", scheme="bearer", bearerFormat="JWT"
+            ),
+        ]
     elif cfg.API_KEY_ENABLED:
         if cfg.OPA_ENABLED:
             raise ValueError("OPA_ENABLED and API_KEY_ENABLED are mutually exclusive")
@@ -136,16 +166,18 @@ def create_app():  # noqa: C901
         os.environ["PYGEOAPI_KEY_GLOBAL"] = cfg.PYGEOAPI_KEY_GLOBAL
 
         PYGEOAPI_APP.add_middleware(
-            AuthorizerMiddleware, public_paths=["/openapi"], key_pattern="PYGEOAPI_KEY_"
+            AuthorizerMiddleware,
+            public_paths=[f"{cfg.FASTGEOAPI_CONTEXT}/openapi"],
+            key_pattern="PYGEOAPI_KEY_",
         )
 
-        security_scheme = SecurityScheme(
-            type="apiKey", name="X-API-KEY", security_scheme_in="header"
-        )
+        security_schemes = [
+            SecurityScheme(type="apiKey", name="X-API-KEY", security_scheme_in="header")
+        ]
 
-    if security_scheme:
+    if security_schemes:
         PYGEOAPI_APP.add_middleware(
-            OpenapiSecurityMiddleware, security_scheme=security_scheme
+            OpenapiSecurityMiddleware, security_schemes=security_schemes
         )
 
     app.mount(path=cfg.FASTGEOAPI_CONTEXT, app=PYGEOAPI_APP)

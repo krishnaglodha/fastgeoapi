@@ -1,0 +1,48 @@
+# Simple workflow for deploying static content to GitHub Pages
+name: Deploy MkDocs Site
+
+on:
+  push:
+    branches:
+      - master
+      - main
+      - develop
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: write
+  # pages: write
+  # id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure Git Credentials
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+      - name: Setup Python
+        uses: actions/setup-python@v5.1.1
+        with:
+          python-version: 3.*
+      - run: echo "cache_id=$(date --utc '+%V')" >> $GITHUB_ENV
+      - uses: actions/cache@v4.0.2
+        with:
+          key: mkdocs-material-${{ env.cache_id }}
+          path: .cache
+          restore-keys: |
+            mkdocs-material-
+      - name: Install dependencies
+        run: pip install mkdocs mkdocs-material termynal
+      - name: Deploy and publish to GitHub Pages
+        run: mkdocs gh-deploy --force

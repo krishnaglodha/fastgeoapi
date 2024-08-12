@@ -1,0 +1,85 @@
+name: Validate OpenAPI with Spectral
+
+on:
+  - push
+  - pull_request
+
+jobs:
+  spectral-oas:
+    name: Lint and validate OpenAPI document for pygeoapi configuration
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the repository
+      - name: Check out the repository
+        uses: actions/checkout@v4.1.1
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5.1.1
+        with:
+          python-version: "3.10"
+
+      - name: Upgrade pip
+        run: |
+          pip install --constraint=$GITHUB_WORKSPACE/.github/workflows/constraints.txt pip
+          pip --version
+
+      - name: Install Poetry
+        run: |
+          pipx install --pip-args=--constraint=$GITHUB_WORKSPACE/.github/workflows/constraints.txt poetry
+          poetry --version
+
+      - name: Install fastgeoapi CLI
+        run: |
+          poetry install
+          poetry run fastgeoapi openapi
+      # Create OAS3 ruleset
+      - name: Create OAS 3
+        run: |
+          echo 'extends: ["spectral:oas"]' > .spectral.oas3.yaml
+
+      # Run Spectral for OAS3
+      - name: Run Spectral for OAS3
+        uses: stoplightio/spectral-action@latest
+        with:
+          file_glob: "pygeoapi-openapi.json"
+          spectral_ruleset: ".spectral.oas3.yaml"
+
+  spectral-owasp:
+    name: Validate OpenAPI document against OWASP Top 10 API security rules
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the repository
+      - name: Check out the repository
+        uses: actions/checkout@v4.1.1
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5.1.1
+        with:
+          python-version: "3.10"
+
+      - name: Upgrade pip
+        run: |
+          pip install --constraint=$GITHUB_WORKSPACE/.github/workflows/constraints.txt pip
+          pip --version
+
+      - name: Install Poetry
+        run: |
+          pipx install --pip-args=--constraint=$GITHUB_WORKSPACE/.github/workflows/constraints.txt poetry
+          poetry --version
+
+      - name: Install fastgeoapi CLI
+        run: |
+          poetry install
+          poetry run fastgeoapi openapi
+      # Create OWASP API Security 10 ruleset
+      - name: Create OWASP API Security 10
+        run: |
+          npm install -g @stoplight/spectral-owasp-ruleset@latest
+          echo 'extends: ["https://unpkg.com/@stoplight/spectral-owasp-ruleset/dist/ruleset.mjs"]' > .spectral.owasp-top-10.yaml
+
+      # Run Spectral for OWASP Top 10
+      - name: Run Spectral for OWASP top 10
+        uses: stoplightio/spectral-action@latest
+        with:
+          file_glob: "pygeoapi-openapi.json"
+          spectral_ruleset: ".spectral.owasp-top-10.yaml"

@@ -1,4 +1,5 @@
 """Nox sessions."""
+
 import os
 import shutil
 import sys
@@ -101,7 +102,7 @@ def precommit(session: NoxPoetrySession) -> None:
         "pre-commit",
         "pre-commit-hooks",
         "pyupgrade",
-        "reorder-python-imports",
+        "isort",
     )
     session.run("pre-commit", "clean")
     session.run("pre-commit", *args)
@@ -155,7 +156,7 @@ def mypy(session: NoxPoetrySession) -> None:
 def tests(session: NoxPoetrySession) -> None:
     """Run the test suite."""
     session.install(".")
-    session.install("coverage[toml]", "pytest", "pygments")
+    session.install("coverage[toml]", "pytest", "pygments", "schemathesis")
     try:
         session.run("coverage", "run", "--parallel", "-m", "pytest", *session.posargs)
     finally:
@@ -180,7 +181,7 @@ def coverage(session: NoxPoetrySession) -> None:
 def typeguard(session: NoxPoetrySession) -> None:
     """Runtime type checking using Typeguard."""
     session.install(".")
-    session.install("pytest", "typeguard", "pygments")
+    session.install("pytest", "typeguard", "pygments", "schemathesis")
     session.run("pytest", f"--typeguard-packages={package}", *session.posargs)
 
 
@@ -212,6 +213,9 @@ def docs_build(session: NoxPoetrySession) -> None:
         "mkdocs-material",
         "mkdocs-material-extras",
         "mkdocs-material-extensions",
+        "mkdocs-swagger-ui-tag",
+        "mkdocs-typer",
+        "termynal",
     )
 
     build_dir = Path("docs_build", "site")
@@ -231,6 +235,9 @@ def docs(session: NoxPoetrySession) -> None:
         "mkdocs-material",
         "mkdocs-material-extras",
         "mkdocs-material-extensions",
+        "mkdocs-swagger-ui-tag",
+        "mkdocs-typer",
+        "termynal",
     )
 
     build_dir = Path("docs_build", "site")

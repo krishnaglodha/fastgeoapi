@@ -119,6 +119,7 @@ venv.bak/
 
 # mkdocs documentation
 /site
+/docs_build
 
 # mypy
 .mypy_cache/
@@ -130,3 +131,6 @@ dmypy.json
 
 # OS
 .DS_Store
+.aider*
+
+/pygeoapi-openapi.json
